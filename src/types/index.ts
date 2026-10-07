@@ -110,6 +110,7 @@ export interface SicringModule {
   mediaType: 'audio' | 'video' | 'panduan';
   status: 'published' | 'review' | 'draft';
   safetyGuideline: string;
+  textGuide?: string;
   steps: {
     stepNumber: number;
     title: string;

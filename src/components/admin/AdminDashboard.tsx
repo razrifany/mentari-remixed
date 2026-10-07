@@ -21,9 +21,17 @@ import {
   FileSpreadsheet,
   AlertCircle,
   FileCheck,
+  Menu,
+  X,
+  LogOut,
+  ChevronRight,
+  BookOpen,
+  Save,
+  Check,
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
-import { User, FollowUpCase, CaseStatus } from '../../types';
+import { User, FollowUpCase, CaseStatus, SicringComponentKey } from '../../types';
+import { DEFAULT_SICRING_TEXT_GUIDES } from '../../data/sicringGuides';
 import { BidanPatientDetailModal } from './BidanPatientDetailModal';
 import { RegisterMotherModal } from './RegisterMotherModal';
 
@@ -38,6 +46,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onSwitchToUser }
     cases,
     screenings,
     sicringLogs,
+    sicringTextGuides,
+    updateSicringTextGuide,
     consultations,
     tpmbList,
     thresholdConfig,
@@ -50,8 +60,24 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onSwitchToUser }
   } = useApp();
 
   const [activeTab, setActiveTab] = useState<
-    'antrian' | 'pasien' | 'pendampingan' | 'riset' | 'ambang' | 'audit'
+    'antrian' | 'pasien' | 'pendampingan' | 'panduan_sicring' | 'riset' | 'ambang' | 'audit'
   >('antrian');
+
+  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
+
+  // SICRING Text Guide Admin Editor State
+  const [selectedSicringEditKey, setSelectedSicringEditKey] = useState<SicringComponentKey>('olah_tubuh');
+  const [guideTextEditValue, setGuideTextEditValue] = useState<string>('');
+  const [isGuideSavedToast, setIsGuideSavedToast] = useState(false);
+
+  // Sync guideTextEditValue when selectedSicringEditKey or sicringTextGuides changes
+  React.useEffect(() => {
+    setGuideTextEditValue(
+      sicringTextGuides?.[selectedSicringEditKey] ||
+        DEFAULT_SICRING_TEXT_GUIDES[selectedSicringEditKey] ||
+        ''
+    );
+  }, [selectedSicringEditKey, sicringTextGuides]);
 
   // Selected patient for modal
   const [selectedPatient, setSelectedPatient] = useState<User | null>(null);
@@ -119,180 +145,324 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onSwitchToUser }
     setTimeout(() => setIsThresholdSaved(false), 2500);
   };
 
+  const navItems = [
+    {
+      id: 'antrian' as const,
+      label: 'Antrian & Triase Hari Ini',
+      icon: AlertTriangle,
+      badge: openCases.length > 0 ? openCases.length : null,
+      badgeColor: 'bg-rose-500 text-white',
+    },
+    {
+      id: 'pasien' as const,
+      label: 'Daftar Pasien TPMB',
+      icon: Users,
+      badge: patients.length,
+      badgeColor: 'bg-sky-100 text-sky-800',
+    },
+    {
+      id: 'pendampingan' as const,
+      label: 'Jadwal Pendampingan',
+      icon: HeartHandshake,
+      badge:
+        consultations.filter((c) => c.status === 'menunggu').length > 0
+          ? consultations.filter((c) => c.status === 'menunggu').length
+          : null,
+      badgeColor: 'bg-amber-500 text-white',
+    },
+    {
+      id: 'panduan_sicring' as const,
+      label: 'Kelola Panduan SICRING',
+      icon: BookOpen,
+      badge: '5 Modul',
+      badgeColor: 'bg-purple-100 text-purple-800',
+    },
+    {
+      id: 'riset' as const,
+      label: 'Modul Riset & Ekspor',
+      icon: FileSpreadsheet,
+    },
+    {
+      id: 'ambang' as const,
+      label: 'Konfigurasi Ambang EPDS',
+      icon: Settings,
+    },
+    {
+      id: 'audit' as const,
+      label: 'Log Audit Sistem',
+      icon: ShieldCheck,
+      badge: auditLogs.length,
+      badgeColor: 'bg-slate-100 text-slate-700',
+    },
+  ];
+
+  const getTabTitle = () => {
+    switch (activeTab) {
+      case 'antrian':
+        return 'Antrian & Triase Pasien Hari Ini';
+      case 'pasien':
+        return 'Daftar Pasien Bidan TPMB';
+      case 'pendampingan':
+        return 'Jadwal Konsultasi & Pendampingan';
+      case 'panduan_sicring':
+        return 'Pengelolaan Teks Panduan SICRING';
+      case 'riset':
+        return 'Modul Analisis Riset & Ekspor Data';
+      case 'ambang':
+        return 'Konfigurasi Ambang Batas EPDS';
+      case 'audit':
+        return 'Log Audit & Keamanan Sistem';
+      default:
+        return 'Clinical Dashboard';
+    }
+  };
+
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col text-slate-800">
-      {/* Top Professional Header */}
-      <header className="bg-white border-b border-sky-100 shadow-2xs sticky top-0 z-40">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-sky-600 text-white flex items-center justify-center font-black text-xl shadow-xs">
-              M
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h1 className="font-bold text-slate-900 text-base leading-tight">
-                  MENTARI Clinical Portal
-                </h1>
-                <span className="bg-sky-100 text-sky-800 text-[11px] font-bold px-2.5 py-0.5 rounded-full">
-                  {currentUser?.role === 'peneliti'
-                    ? 'Peneliti'
-                    : currentUser?.role === 'admin'
-                    ? 'Super Admin'
-                    : 'Bidan TPMB'}
-                </span>
+    <div className="min-h-screen bg-slate-50 flex text-slate-800">
+      {/* Mobile Backdrop */}
+      {isMobileSidebarOpen && (
+        <div
+          onClick={() => setIsMobileSidebarOpen(false)}
+          className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs z-40 lg:hidden"
+        />
+      )}
+
+      {/* Responsive Left Sidebar */}
+      <aside
+        className={`fixed inset-y-0 left-0 z-50 w-72 bg-white border-r border-slate-200 flex flex-col justify-between transition-transform duration-200 ease-in-out lg:static lg:translate-x-0 ${
+          isMobileSidebarOpen ? 'translate-x-0' : '-translate-x-full'
+        }`}
+      >
+        <div className="flex flex-col h-full overflow-y-auto">
+          {/* Sidebar Brand Header */}
+          <div className="p-4 sm:p-5 border-b border-slate-100 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-2xl bg-sky-600 text-white flex items-center justify-center font-black text-xl shadow-xs">
+                M
               </div>
-              <p className="text-xs text-slate-500">{currentTpmb.name}</p>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h1 className="font-bold text-slate-900 text-base leading-tight">
+                    MENTARI
+                  </h1>
+                  <span className="bg-sky-100 text-sky-800 text-[10px] font-bold px-2 py-0.5 rounded-full">
+                    {currentUser?.role === 'peneliti'
+                      ? 'Peneliti'
+                      : currentUser?.role === 'admin'
+                      ? 'Admin'
+                      : 'Bidan'}
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-500 font-medium truncate max-w-[150px]">
+                  {currentTpmb.name}
+                </p>
+              </div>
             </div>
+
+            {/* Mobile Close Button */}
+            <button
+              onClick={() => setIsMobileSidebarOpen(false)}
+              className="lg:hidden p-1.5 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100"
+            >
+              <X className="w-5 h-5" />
+            </button>
           </div>
 
-          <div className="flex items-center gap-2.5">
-            {/* Quick Role Switcher for seamless testing */}
-            <div className="hidden md:flex items-center bg-slate-100 rounded-xl p-1 text-xs">
-              <span className="text-[10px] font-semibold text-slate-400 px-2 uppercase">Uji Peran:</span>
+          {/* Quick Role Switcher (Uji Peran) */}
+          <div className="px-4 py-3 bg-slate-50/70 border-b border-slate-100">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-1.5">
+              Uji Peran Sistem
+            </span>
+            <div className="grid grid-cols-3 gap-1 bg-slate-200/60 p-1 rounded-xl text-[11px] font-semibold">
               <button
                 onClick={() => loginAs('user-bidan-1')}
-                className={`px-2.5 py-1 rounded-lg font-semibold transition-colors ${
+                className={`py-1 text-center rounded-lg transition-colors ${
                   currentUser?.role === 'bidan'
                     ? 'bg-white text-sky-700 shadow-xs'
                     : 'text-slate-600 hover:text-slate-900'
                 }`}
               >
-                Bidan TPMB
+                Bidan
               </button>
               <button
                 onClick={() => loginAs('user-peneliti-1')}
-                className={`px-2.5 py-1 rounded-lg font-semibold transition-colors ${
+                className={`py-1 text-center rounded-lg transition-colors ${
                   currentUser?.role === 'peneliti'
                     ? 'bg-white text-sky-700 shadow-xs'
                     : 'text-slate-600 hover:text-slate-900'
                 }`}
               >
-                Peneliti Riset
+                Riset
               </button>
               <button
                 onClick={() => loginAs('user-admin-1')}
-                className={`px-2.5 py-1 rounded-lg font-semibold transition-colors ${
+                className={`py-1 text-center rounded-lg transition-colors ${
                   currentUser?.role === 'admin'
                     ? 'bg-white text-sky-700 shadow-xs'
                     : 'text-slate-600 hover:text-slate-900'
                 }`}
               >
-                Super Admin
+                Admin
               </button>
             </div>
+          </div>
 
-            {/* Switch to User view */}
+          {/* Navigation Menu Links */}
+          <div className="p-3 flex-1 space-y-1">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 px-3 py-1.5 block">
+              Menu Utama
+            </span>
+            {navItems.map((item) => {
+              const Icon = item.icon;
+              const isActive = activeTab === item.id;
+              return (
+                <button
+                  key={item.id}
+                  onClick={() => {
+                    setActiveTab(item.id);
+                    setIsMobileSidebarOpen(false);
+                  }}
+                  className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-semibold transition-colors ${
+                    isActive
+                      ? 'bg-sky-600 text-white shadow-xs'
+                      : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                  }`}
+                >
+                  <div className="flex items-center gap-2.5">
+                    <Icon className={`w-4 h-4 ${isActive ? 'text-white' : 'text-slate-500'}`} />
+                    <span>{item.label}</span>
+                  </div>
+                  {item.badge !== null && item.badge !== undefined && (
+                    <span
+                      className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                        isActive ? 'bg-white/20 text-white' : item.badgeColor
+                      }`}
+                    >
+                      {item.badge}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+
+            {/* Quick Action in Navigation */}
+            <div className="pt-3">
+              <button
+                onClick={() => {
+                  setIsRegisterOpen(true);
+                  setIsMobileSidebarOpen(false);
+                }}
+                className="w-full bg-sky-50 hover:bg-sky-100 text-sky-700 border border-sky-200/80 px-3 py-2 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-colors"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Daftarkan Ibu Baru</span>
+              </button>
+            </div>
+          </div>
+
+          {/* User Info & Bottom Controls */}
+          <div className="p-3 border-t border-slate-100 bg-slate-50/50 space-y-2">
+            <div className="flex items-center gap-2.5 px-2 py-1.5">
+              <div className="w-8 h-8 rounded-xl bg-sky-100 text-sky-700 flex items-center justify-center font-bold text-xs shrink-0">
+                {currentUser?.name.charAt(0) || 'U'}
+              </div>
+              <div className="min-w-0 flex-1">
+                <span className="text-xs font-bold text-slate-800 block truncate">
+                  {currentUser?.name}
+                </span>
+                <span className="text-[10px] text-slate-500 capitalize block truncate">
+                  {currentUser?.role === 'peneliti'
+                    ? 'Peneliti Riset EPDS'
+                    : currentUser?.role === 'admin'
+                    ? 'Super Admin Sistem'
+                    : 'Bidan Penanggung Jawab'}
+                </span>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2 pt-1">
+              <button
+                onClick={onSwitchToUser}
+                className="flex items-center justify-center gap-1.5 bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 py-1.5 px-2 rounded-xl text-[11px] font-semibold transition-colors"
+                title="Buka tampilan aplikasi untuk pasien / ibu"
+              >
+                <ArrowLeft className="w-3.5 h-3.5" />
+                <span>Aplikasi Ibu</span>
+              </button>
+
+              <button
+                onClick={logout}
+                className="flex items-center justify-center gap-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-100 py-1.5 px-2 rounded-xl text-[11px] font-semibold transition-colors"
+              >
+                <LogOut className="w-3.5 h-3.5" />
+                <span>Keluar</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </aside>
+
+      {/* Main Workspace on the Right */}
+      <div className="flex-1 flex flex-col min-w-0 min-h-screen">
+        {/* Top Header of Main Workspace */}
+        <header className="bg-white border-b border-slate-200 sticky top-0 z-30 px-4 sm:px-6 py-3 flex items-center justify-between shadow-2xs">
+          <div className="flex items-center gap-3 min-w-0">
+            {/* Hamburger button for mobile */}
+            <button
+              onClick={() => setIsMobileSidebarOpen(true)}
+              className="lg:hidden p-2 text-slate-600 hover:text-slate-900 rounded-xl hover:bg-slate-100 transition-colors"
+              title="Buka Menu Sidebar"
+            >
+              <Menu className="w-5 h-5" />
+            </button>
+
+            <div>
+              <h2 className="text-base sm:text-lg font-bold text-slate-900 leading-tight">
+                {getTabTitle()}
+              </h2>
+              <p className="text-xs text-slate-500 hidden sm:block">
+                {currentTpmb.name} &bull; {currentTpmb.midwifeName}
+              </p>
+            </div>
+          </div>
+
+          {/* Quick Actions in Header */}
+          <div className="flex items-center gap-2">
+            {activeTab === 'riset' && (
+              <button
+                onClick={() => exportResearchData()}
+                className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-3 py-1.5 rounded-xl text-xs flex items-center gap-1.5 transition-colors shadow-2xs"
+              >
+                <Download className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Unduh Dataset</span> Riset
+              </button>
+            )}
+
+            {activeTab === 'pasien' && (
+              <button
+                onClick={() => setIsRegisterOpen(true)}
+                className="bg-sky-600 hover:bg-sky-700 text-white font-bold px-3 py-1.5 rounded-xl text-xs flex items-center gap-1.5 transition-colors shadow-2xs"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>Daftarkan Ibu</span>
+              </button>
+            )}
+
             <button
               onClick={onSwitchToUser}
               className="bg-sky-50 hover:bg-sky-100 text-sky-700 font-bold px-3 py-1.5 rounded-xl border border-sky-200 text-xs flex items-center gap-1.5 transition-colors"
             >
               <ArrowLeft className="w-3.5 h-3.5" />
-              <span>Buka Aplikasi Ibu</span>
-            </button>
-
-            {/* Logout */}
-            <button
-              onClick={logout}
-              className="text-xs text-rose-600 hover:bg-rose-50 px-2.5 py-1.5 rounded-xl transition-colors font-medium"
-            >
-              Keluar
+              <span className="hidden md:inline">Mode Ibu</span>
             </button>
           </div>
-        </div>
-      </header>
+        </header>
 
-      {/* Navigation Subheader / Tabs */}
-      <div className="bg-white border-b border-slate-200">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 flex overflow-x-auto gap-2 py-2">
-          <button
-            onClick={() => setActiveTab('antrian')}
-            className={`px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 whitespace-nowrap transition-colors ${
-              activeTab === 'antrian'
-                ? 'bg-sky-600 text-white shadow-xs'
-                : 'text-slate-600 hover:bg-slate-100'
-            }`}
-          >
-            <AlertTriangle className="w-4 h-4" />
-            <span>Antrian & Triase Hari Ini</span>
-            {openCases.length > 0 && (
-              <span className="bg-rose-500 text-white text-[10px] px-1.5 py-0.2 rounded-full font-black">
-                {openCases.length}
-              </span>
-            )}
-          </button>
-
-          <button
-            onClick={() => setActiveTab('pasien')}
-            className={`px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 whitespace-nowrap transition-colors ${
-              activeTab === 'pasien'
-                ? 'bg-sky-600 text-white shadow-xs'
-                : 'text-slate-600 hover:bg-slate-100'
-            }`}
-          >
-            <Users className="w-4 h-4" />
-            <span>Daftar Pasien TPMB ({patients.length})</span>
-          </button>
-
-          <button
-            onClick={() => setActiveTab('pendampingan')}
-            className={`px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 whitespace-nowrap transition-colors ${
-              activeTab === 'pendampingan'
-                ? 'bg-sky-600 text-white shadow-xs'
-                : 'text-slate-600 hover:bg-slate-100'
-            }`}
-          >
-            <HeartHandshake className="w-4 h-4" />
-            <span>Jadwal Pendampingan</span>
-            {consultations.filter((c) => c.status === 'menunggu').length > 0 && (
-              <span className="bg-amber-500 text-white text-[10px] px-1.5 py-0.2 rounded-full">
-                {consultations.filter((c) => c.status === 'menunggu').length}
-              </span>
-            )}
-          </button>
-
-          <button
-            onClick={() => setActiveTab('riset')}
-            className={`px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 whitespace-nowrap transition-colors ${
-              activeTab === 'riset'
-                ? 'bg-sky-600 text-white shadow-xs'
-                : 'text-slate-600 hover:bg-slate-100'
-            }`}
-          >
-            <FileSpreadsheet className="w-4 h-4" />
-            <span>Modul Riset (T0/T1 & Export)</span>
-          </button>
-
-          <button
-            onClick={() => setActiveTab('ambang')}
-            className={`px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 whitespace-nowrap transition-colors ${
-              activeTab === 'ambang'
-                ? 'bg-sky-600 text-white shadow-xs'
-                : 'text-slate-600 hover:bg-slate-100'
-            }`}
-          >
-            <Settings className="w-4 h-4" />
-            <span>Ambang EPDS</span>
-          </button>
-
-          <button
-            onClick={() => setActiveTab('audit')}
-            className={`px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 whitespace-nowrap transition-colors ${
-              activeTab === 'audit'
-                ? 'bg-sky-600 text-white shadow-xs'
-                : 'text-slate-600 hover:bg-slate-100'
-            }`}
-          >
-            <ShieldCheck className="w-4 h-4" />
-            <span>Audit Log ({auditLogs.length})</span>
-          </button>
-        </div>
-      </div>
-
-      {/* Main Content Area */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 w-full flex-1">
-        {/* TAB 1: ANTRIAN & TRIASE HARI INI */}
-        {activeTab === 'antrian' && (
-          <div className="space-y-6">
+        {/* Main Content Area */}
+        <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 w-full flex-1">
+          {/* TAB 1: ANTRIAN & TRIASE HARI INI */}
+          {activeTab === 'antrian' && (
+            <div className="space-y-6">
             {/* KPI Cards Banner */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
               <div className="bg-white border border-sky-100 rounded-2xl p-4 shadow-2xs">
@@ -702,6 +872,188 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onSwitchToUser }
           </div>
         )}
 
+        {/* TAB: KELOLA PANDUAN TEKS SICRING */}
+        {activeTab === 'panduan_sicring' && (
+          <div className="space-y-6">
+            {/* Header Card */}
+            <div className="bg-gradient-to-r from-purple-700 via-purple-600 to-indigo-600 rounded-3xl p-6 text-white shadow-md flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div>
+                <span className="text-xs font-semibold uppercase tracking-wider text-purple-200">
+                  Manajemen Konten Intervensi
+                </span>
+                <h2 className="text-xl font-bold mt-1">Pengelolaan Teks Panduan SICRING</h2>
+                <p className="text-xs text-purple-100 mt-1 max-w-xl leading-relaxed">
+                  Bidan dan admin dapat mengedit teks panduan secara langsung untuk 5 modul SICRING. Format teks sederhana ini memudahkan pembaruan instruksi klinis dan istilah kultural.
+                </p>
+              </div>
+
+              {isGuideSavedToast && (
+                <div className="bg-emerald-500 text-white font-bold px-4 py-2 rounded-2xl text-xs flex items-center gap-2 shadow-lg animate-in fade-in">
+                  <Check className="w-4 h-4" />
+                  <span>Teks Panduan Berhasil Diperbarui!</span>
+                </div>
+              )}
+            </div>
+
+            {/* Module Picker Tabs */}
+            <div className="bg-white p-3 rounded-2xl border border-slate-200 shadow-2xs">
+              <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider px-2 block mb-2">
+                Pilih Komponen yang Ingin Diedit:
+              </span>
+              <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+                {[
+                  { id: 'olah_tubuh' as const, num: 1, label: 'Olah Tubuh Sadar' },
+                  { id: 'charging' as const, num: 2, label: 'Charging Ruhani' },
+                  { id: 'healing_touch' as const, num: 3, label: 'Healing Touch' },
+                  { id: 'blessing_water' as const, num: 4, label: 'Blessing Water' },
+                  { id: 'pendampingan' as const, num: 5, label: 'Pendampingan Bidan' },
+                ].map((m) => {
+                  const isSelected = selectedSicringEditKey === m.id;
+                  return (
+                    <button
+                      key={m.id}
+                      type="button"
+                      onClick={() => setSelectedSicringEditKey(m.id)}
+                      className={`p-3 rounded-xl border text-left transition-all flex items-center gap-2.5 ${
+                        isSelected
+                          ? 'border-purple-600 bg-purple-50 text-purple-950 font-bold shadow-2xs ring-2 ring-purple-600/20'
+                          : 'border-slate-200 hover:border-slate-300 bg-white text-slate-700'
+                      }`}
+                    >
+                      <span
+                        className={`w-6 h-6 rounded-lg text-xs font-bold flex items-center justify-center shrink-0 ${
+                          isSelected ? 'bg-purple-600 text-white' : 'bg-slate-100 text-slate-600'
+                        }`}
+                      >
+                        {m.num}
+                      </span>
+                      <span className="text-xs truncate">{m.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Split Screen: Editor & Live Preview */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* Left Column: Textarea Editor */}
+              <div className="bg-white rounded-3xl border border-slate-200 p-5 sm:p-6 shadow-xs flex flex-col justify-between space-y-4">
+                <div>
+                  <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+                    <div>
+                      <h4 className="font-bold text-slate-900 text-sm">
+                        Editor Teks: {selectedSicringEditKey.toUpperCase().replace('_', ' ')}
+                      </h4>
+                      <p className="text-[11px] text-slate-500 mt-0.5">
+                        Format teks bebas (gunakan penomoran seperti 1., 2. untuk bab sub-judul).
+                      </p>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setGuideTextEditValue(DEFAULT_SICRING_TEXT_GUIDES[selectedSicringEditKey]);
+                      }}
+                      className="text-[11px] font-semibold text-slate-500 hover:text-slate-800 underline"
+                      title="Kembalikan ke draf bawaan awal"
+                    >
+                      Reset Default
+                    </button>
+                  </div>
+
+                  <div className="mt-3">
+                    <textarea
+                      rows={16}
+                      value={guideTextEditValue}
+                      onChange={(e) => setGuideTextEditValue(e.target.value)}
+                      className="w-full text-xs sm:text-sm p-4 bg-slate-50 rounded-2xl border border-slate-200 focus:border-purple-500 focus:bg-white focus:outline-hidden font-mono leading-relaxed"
+                      placeholder="Tuliskan materi teks panduan di sini..."
+                    />
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between pt-3 border-t border-slate-100">
+                  <span className="text-[11px] text-slate-400">
+                    {guideTextEditValue.length} karakter &bull; Tersimpan di LocalStorage
+                  </span>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      updateSicringTextGuide(selectedSicringEditKey, guideTextEditValue);
+                      setIsGuideSavedToast(true);
+                      setTimeout(() => setIsGuideSavedToast(false), 3000);
+                    }}
+                    className="bg-purple-600 hover:bg-purple-700 text-white font-bold px-5 py-2.5 rounded-xl text-xs flex items-center gap-2 shadow-xs transition-transform active:scale-95"
+                  >
+                    <Save className="w-4 h-4" />
+                    <span>Simpan Pembaruan Teks</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Right Column: Live Reader Preview */}
+              <div className="bg-white rounded-3xl border border-slate-200 p-5 sm:p-6 shadow-xs flex flex-col justify-between space-y-4">
+                <div>
+                  <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+                    <h4 className="font-bold text-slate-900 text-sm flex items-center gap-2">
+                      <BookOpen className="w-4 h-4 text-sky-600" />
+                      <span>Pratinjau Tampilan di Aplikasi Ibu</span>
+                    </h4>
+                    <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200">
+                      Live Preview
+                    </span>
+                  </div>
+
+                  {/* Render preview formatted */}
+                  <div className="mt-4 bg-slate-50/70 rounded-2xl p-4 sm:p-5 border border-slate-200 max-h-[460px] overflow-y-auto space-y-3">
+                    {guideTextEditValue.split('\n\n').map((para, idx) => {
+                      const trimmed = para.trim();
+                      if (!trimmed) return null;
+                      if (idx === 0 && trimmed.toUpperCase() === trimmed) {
+                        return (
+                          <div key={idx} className="pb-2 border-b border-slate-200">
+                            <h5 className="font-bold text-slate-900 text-sm">{trimmed}</h5>
+                          </div>
+                        );
+                      }
+                      if (/^\d+\.\s/.test(trimmed)) {
+                        const lines = trimmed.split('\n');
+                        const title = lines[0];
+                        const contentLines = lines.slice(1);
+                        return (
+                          <div key={idx} className="bg-white p-3.5 rounded-xl border border-slate-200/80 shadow-2xs space-y-1.5">
+                            <h6 className="font-bold text-sky-950 text-xs flex items-center gap-1.5">
+                              <span className="w-4 h-4 rounded-md bg-sky-100 text-sky-700 text-[10px] font-bold flex items-center justify-center shrink-0">
+                                {title.match(/^\d+/)?.[0]}
+                              </span>
+                              <span>{title.replace(/^\d+\.\s*/, '')}</span>
+                            </h6>
+                            {contentLines.map((line, lIdx) => (
+                              <p key={lIdx} className="text-[11px] text-slate-600 pl-5">
+                                {line}
+                              </p>
+                            ))}
+                          </div>
+                        );
+                      }
+                      return (
+                        <p key={idx} className="text-xs text-slate-700 leading-relaxed">
+                          {trimmed}
+                        </p>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div className="text-[11px] text-slate-400 text-center pt-2 border-t border-slate-100">
+                  Perubahan yang disimpan di tab ini akan langsung muncul di halaman panduan Ibu.
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* TAB 4: MODUL PENELITIAN & RISET */}
         {activeTab === 'riset' && (
           <div className="space-y-6">
@@ -950,6 +1302,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onSwitchToUser }
           </div>
         )}
       </main>
+      </div>
 
       {/* Patient Detail Modal */}
       <BidanPatientDetailModal

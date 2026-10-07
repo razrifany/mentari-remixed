@@ -11,6 +11,7 @@ import {
   AuditLog,
   ThresholdConfig,
   TriageCategory,
+  SicringComponentKey,
 } from '../types';
 import {
   INITIAL_TPMB_LIST,
@@ -25,6 +26,7 @@ import {
   INITIAL_AUDIT_LOGS,
   EPDS_ITEMS,
 } from '../data/mockData';
+import { DEFAULT_SICRING_TEXT_GUIDES } from '../data/sicringGuides';
 import { downloadCSV, generateResearchCSV } from '../utils/csvExport';
 
 interface AppContextType {
@@ -35,6 +37,7 @@ interface AppContextType {
   cases: FollowUpCase[];
   sicringModules: SicringModule[];
   sicringLogs: SicringSessionLog[];
+  sicringTextGuides: Record<SicringComponentKey, string>;
   consultations: ConsultationRequest[];
   articles: EducationalArticle[];
   thresholdConfig: ThresholdConfig;
@@ -46,6 +49,7 @@ interface AppContextType {
   logout: () => void;
   submitEPDSScreening: (answers: { [itemId: number]: number }, waveType?: 'T0' | 'rutin' | 'T1') => EPDSScreeningResult;
   recordSicringSession: (logData: Omit<SicringSessionLog, 'id' | 'timestamp' | 'responderCode'>) => void;
+  updateSicringTextGuide: (moduleId: SicringComponentKey, newText: string) => void;
   updateCaseStatus: (caseId: string, newStatus: FollowUpCase['status'], notes: string, referralTarget?: string) => void;
   requestConsultation: (req: Omit<ConsultationRequest, 'id' | 'userId' | 'userName' | 'responderCode' | 'tpmbId' | 'status'>) => void;
   updateConsultationStatus: (consultationId: string, status: ConsultationRequest['status'], midwifeNotes?: string) => void;
@@ -60,6 +64,7 @@ interface AppContextType {
     emergencyPhone?: string;
   }) => User;
   updateConsent: (userId: string, appUsage: boolean, research: boolean, midwifeShare: boolean) => void;
+  updateUserProfile: (userId: string, data: Partial<User>) => void;
   updateThresholdConfig: (newConfig: Partial<ThresholdConfig>) => void;
   exportResearchData: () => void;
   addAuditLog: (action: string, details: string) => void;
@@ -94,6 +99,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   });
 
   const [sicringModules, setSicringModules] = useState<SicringModule[]>(INITIAL_SICRING_MODULES);
+
+  const [sicringTextGuides, setSicringTextGuides] = useState<Record<SicringComponentKey, string>>(() => {
+    const saved = localStorage.getItem(`${STORAGE_KEY_PREFIX}sicring_text_guides`);
+    return saved ? JSON.parse(saved) : DEFAULT_SICRING_TEXT_GUIDES;
+  });
 
   const [sicringLogs, setSicringLogs] = useState<SicringSessionLog[]>(() => {
     const saved = localStorage.getItem(`${STORAGE_KEY_PREFIX}sicring_logs`);
@@ -137,6 +147,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   useEffect(() => {
     localStorage.setItem(`${STORAGE_KEY_PREFIX}sicring_logs`, JSON.stringify(sicringLogs));
   }, [sicringLogs]);
+
+  useEffect(() => {
+    localStorage.setItem(`${STORAGE_KEY_PREFIX}sicring_text_guides`, JSON.stringify(sicringTextGuides));
+  }, [sicringTextGuides]);
 
   useEffect(() => {
     localStorage.setItem(`${STORAGE_KEY_PREFIX}consultations`, JSON.stringify(consultations));
@@ -305,6 +319,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       `Ibu ${currentUser.name} menyelesaikan sesi: ${logData.moduleTitle} (${Math.round(
         logData.durationSecondsPlayed / 60
       )} menit, mood: ${logData.postMood || 'netral'})`
+    );
+  };
+
+  const updateSicringTextGuide = (moduleId: SicringComponentKey, newText: string) => {
+    setSicringTextGuides((prev) => ({
+      ...prev,
+      [moduleId]: newText,
+    }));
+    // Also sync in sicringModules
+    setSicringModules((prev) =>
+      prev.map((m) => (m.id === moduleId ? { ...m, textGuide: newText } : m))
+    );
+    addAuditLog(
+      'Pembaruan Panduan SICRING',
+      `Teks panduan modul ${moduleId.toUpperCase()} berhasil diperbarui oleh ${currentUser?.name || 'Admin/Bidan'}`
     );
   };
 
@@ -495,6 +524,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     );
   };
 
+  const updateUserProfile = (userId: string, data: Partial<User>) => {
+    setUsers((prev) =>
+      prev.map((u) => (u.id === userId ? { ...u, ...data } : u))
+    );
+    if (currentUser?.id === userId) {
+      setCurrentUser((prev) => (prev ? { ...prev, ...data } : null));
+    }
+    addAuditLog(
+      'Pembaruan Profil Pengguna',
+      `Profil pengguna ${userId} berhasil diperbarui`
+    );
+  };
+
   const updateThresholdConfig = (newConfig: Partial<ThresholdConfig>) => {
     setThresholdConfig((prev) => {
       const updated = {
@@ -539,6 +581,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         cases,
         sicringModules,
         sicringLogs,
+        sicringTextGuides,
         consultations,
         articles,
         thresholdConfig,
@@ -548,11 +591,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         logout,
         submitEPDSScreening,
         recordSicringSession,
+        updateSicringTextGuide,
         updateCaseStatus,
         requestConsultation,
         updateConsultationStatus,
         registerNewMother,
         updateConsent,
+        updateUserProfile,
         updateThresholdConfig,
         exportResearchData,
         addAuditLog,

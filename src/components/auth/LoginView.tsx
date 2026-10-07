@@ -102,7 +102,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
             M
           </div>
           <h1 className="text-xl font-semibold text-slate-800 tracking-tight">
-            MENTARIIIIIIII
+            MENTARI
           </h1>
           <p className="text-xs text-slate-500 font-normal mt-0.5">
             Mental Health Tracking &amp; Recovery Instrument
